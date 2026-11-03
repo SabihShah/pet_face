@@ -1,0 +1,9 @@
+pygame
+numpy
+sounddevice
+faster-whisper
+openwakeword
+piper-tts
+opencv-python
+mediapipe
+hsemotion-onnx

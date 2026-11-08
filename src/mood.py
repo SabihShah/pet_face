@@ -1,6 +1,7 @@
 import json, math, os, time
 
-PATH = os.path.expanduser("~/pet_face/mood.json")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root
+PATH = os.path.join(ROOT, "mood.json")
 MISS_AFTER = 2 * 3600.0
 LONELY_FULL = 6 * 3600.0
 TAU = 900.0                 # mood relaxation time constant, seconds

@@ -1,0 +1,164 @@
+PET ROBOT: COMMAND RUNBOOK
+==========================
+Two kinds of terminals. Never mix them.
+  [ROS]  = system Python, ROS sourced, NO venv   (sim, bridge, ros2 topic ...)
+  [FACE] = ~/pet_face with .venv active, ROS NOT sourced
+
+----------------------------------------------------------------
+1. START EVERYTHING (one terminal each)
+----------------------------------------------------------------
+[ROS]  Simulation (Gazebo + controllers + sensors + wander + avoidance)
+  cd ~/pet_ws && source /opt/ros/jazzy/setup.bash && source install/setup.bash && ros2 launch pet_robot gazebo.launch.py
+
+[ROS]  Face bridge (touch, IMU events, cliff/near events, voice commands -> /cmd_vel)
+  cd ~/pet_ws && source /opt/ros/jazzy/setup.bash && source install/setup.bash && ros2 run pet_robot face_bridge.py
+
+[FACE] Face + behavior          (UDP 5005 in)
+  cd ~/pet_face && source .venv/bin/activate && python src/app.py
+
+[FACE] Camera (face, emotion, gestures, gaze)
+  python src/camera_module.py                 # options: --cam N (default 1), --no-preview, --no-hands
+
+[FACE] Voice input (wake word "alexa", Whisper, command parser)
+  python src/voice_module.py --model small.en
+
+[FACE] Voice output (Piper TTS, mouth sync)   (UDP 5006 in)
+  python src/speak_module.py
+
+[FACE] Brain (Ollama qwen2.5:3b, facts, mood)   (UDP 5008 in; Ollama service must be running)
+  python src/brain_module.py
+
+----------------------------------------------------------------
+2. BUILD (after changing urdf, launch, CMakeLists, scripts list)
+----------------------------------------------------------------
+[ROS]
+  cd ~/pet_ws && source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-select pet_robot && source install/setup.bash
+Note: scripts are symlinked, so editing a .py script needs only a restart of that node.
+A NEW script must be added to the install(PROGRAMS ...) line in CMakeLists.txt, then rebuilt.
+
+----------------------------------------------------------------
+3. DRIVE AND WANDER
+----------------------------------------------------------------
+[ROS]  Wander on / off
+  ros2 topic pub --once /wander/enable std_msgs/msg/Bool "{data: true}"
+  ros2 topic pub --once /wander/enable std_msgs/msg/Bool "{data: false}"
+
+[ROS]  Keyboard drive
+  ros2 run teleop_twist_keyboard teleop_twist_keyboard
+  (use u / o for forward+turn arcs)
+
+[ROS]  Watch the control chain
+  ros2 topic echo /cmd_vel --field linear.x
+  ros2 topic echo /cmd_vel_safe --field linear.x
+
+Chain: /cmd_vel -> obstacle_avoidance.py -> /cmd_vel_safe -> cmd_vel_adapter.py -> diff drive + steering
+
+----------------------------------------------------------------
+4. SENSOR CHECKS
+----------------------------------------------------------------
+[ROS]
+  ros2 topic hz /imu                                  # ~50 Hz, z accel ~9.81 at rest
+  ros2 topic hz /camera/image_raw                     # ~11-15 Hz
+  ros2 topic echo /cliff/left --once --field ranges   # floor ~0.34 (sensors tilted 45 deg forward)
+  ros2 topic echo /ir/front --once --field ranges
+  ros2 run rqt_image_view rqt_image_view /camera/image_raw     # run WITHOUT the venv
+
+----------------------------------------------------------------
+5. SIMULATE EVENTS BY HAND
+----------------------------------------------------------------
+[ROS]  Head touch (needs face_bridge running; auto-releases after 3.5 s)
+  ros2 topic pub --once /touch/head std_msgs/msg/Bool "{data: true}"
+
+[ROS]  Fake IMU (bridge ignores the real /imu while /imu_test is active)
+  Pick up:  ros2 topic pub -r 20 -t 20 /imu_test sensor_msgs/msg/Imu "{linear_acceleration: {x: 0.0, y: 0.0, z: 15.0}}"
+  Tilt:     ros2 topic pub -r 20 -t 20 /imu_test sensor_msgs/msg/Imu "{linear_acceleration: {x: 8.0, y: 0.0, z: 6.0}}"
+  Shake:    ros2 topic pub -r 20 -t 20 /imu_test sensor_msgs/msg/Imu "{linear_acceleration: {z: 9.81}, angular_velocity: {x: 6.0}}"
+  (wait ~4 s between tests, 3 s cooldown per event)
+
+[ROS]  Fake voice command (same UDP message voice_module sends to the bridge, port 5009)
+  python3 -c "import socket,json;socket.socket(2,2).sendto(json.dumps({'voice_cmd':{'action':'forward','continuous':True}}).encode(),('127.0.0.1',5009))"
+  python3 -c "import socket,json;socket.socket(2,2).sendto(json.dumps({'voice_cmd':'stop'}).encode(),('127.0.0.1',5009))"
+  Actions: forward, back, left, right, forward_left, forward_right, stop
+  Fields:  continuous (true), dist (meters), secs, angle (degrees, left/right only)
+
+[FACE] Face tests (UDP 5005)
+  python src/send.py emotion content        # touch face
+  python src/send.py emotion cliff          # scared + flashing warning sign
+  python src/send.py emotion sad            # any of the 23+ emotions
+  python src/send.py event wake
+  python src/send.py event speech "hello there"
+  python src/send.py talk true              # fake talking mouth
+
+[FACE] Voice command parser test (no mic needed)
+  python src/voice_cmd.py
+  python src/voice_cmd.py "move forward right" "go back two meters"
+
+----------------------------------------------------------------
+6. VOICE PHRASES (after saying "Alexa")
+----------------------------------------------------------------
+  "move forward"                        3 s forward
+  "move forward until I say stop"       continuous
+  "go forward one meter"                distance (open loop, approximate)
+  "walk forward for five seconds"       timed
+  "go back two meters"
+  "move forward right" / "forward left" arc
+  "turn left" / "turn right"            90 deg (IMU closed loop)
+  "rotate clockwise 180 degrees"        angle
+  "turn around"                         180 deg
+  "stop"                                immediate
+Anything that is not a command goes to the brain as chat.
+
+----------------------------------------------------------------
+7. FILES AND WHAT THEY DO
+----------------------------------------------------------------
+~/pet_ws/src/pet_robot/
+  urdf/pet_robot.urdf.xacro     robot body, 5 front IR, 2 cliff IR, IMU, camera
+  worlds/room.sdf               room, obstacles, 0.3 m platform (cliff test), IMU plugin
+  launch/gazebo.launch.py       sim launch, ros_gz_bridge topic list, spawn height
+  config/controllers.yaml       diff drive + steering controllers
+  CMakeLists.txt                install list for scripts
+  scripts/cmd_vel_adapter.py    tricycle steering adapter (hold only for in-place turns)
+  scripts/obstacle_avoidance.py IR slow/stop/steer, cliff recovery (reverse then spin)
+  scripts/wander.py             random wander (/wander/enable)
+  scripts/face_bridge.py        ROS <-> face UDP: touch, IMU events, cliff/near events, voice commands
+
+~/pet_face/   (all Python scripts live in src/; run from ~/pet_face as: python src/<name>.py)
+  app.py            main loop: face + hands + behavior + UDP 5005
+  face.py           23+ emotions drawing (content, cliff added)
+  hands.py          wave / thumbs-up animations
+  behavior.py       event -> reaction rules (touch, pick_up, tilt, shake, cliff, bump_near)
+  mood.py           happiness, loneliness, "missed you"
+  api.py            UDP event server
+  camera_module.py  face, emotion, gestures, gaze from webcam
+  voice_module.py   wake word, Whisper STT, routes commands (5009) or chat (5008)
+  voice_cmd.py      sentence -> robot command parser
+  speak_module.py   Piper TTS + mouth level
+  brain_module.py   Ollama chat + facts + mood line
+  send.py           manual command/event sender
+  check_*.py, wake_check.py   hardware self-tests
+  facts.json, mood.json       runtime data (personal, keep out of git remotes)
+
+----------------------------------------------------------------
+8. UDP PORTS (localhost)
+----------------------------------------------------------------
+  5005  face app            commands + events (touch, pick_up, tilt, shake, cliff, bump_near, wake, speech, gaze ...)
+  5006  speak_module        {"say": text, "emotion": label}
+  5007  voice_module        {"mute": bool}
+  5008  brain_module        {"text": ...}
+  5009  face_bridge         {"voice_cmd": {...}}
+
+----------------------------------------------------------------
+9. GIT
+----------------------------------------------------------------
+  cd ~/pet_ws && git add -A && git commit -m "message"
+  cd ~/pet_face && git add -A && git commit -m "message"
+  pet_face .gitignore: .venv/ models/ __pycache__/ *.pyc  (add facts.json mood.json before any remote push)
+
+----------------------------------------------------------------
+10. TROUBLESHOOTING
+----------------------------------------------------------------
+  "Waiting for at least 1 matching subscription"  -> face_bridge.py is not running
+  rqt_image_view Qt error                         -> a venv is active; run `deactivate`
+  Camera image is a gray gradient                 -> lens inside the dome shell
+  Mic dead                                        -> wpctl get-volume @DEFAULT_AUDIO_SOURCE@ ; wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0
+  Robot stops then turns                          -> adapter holds only for in-place turns; use arcs for forward+turn

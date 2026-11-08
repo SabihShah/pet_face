@@ -1,8 +1,10 @@
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root (models/ lives there)
 import io, json, socket, sys, time, wave
 import numpy as np, sounddevice as sd
 from piper import PiperVoice
 
-voice = PiperVoice.load("models/tts/en_US-lessac-medium.onnx")
+voice = PiperVoice.load(os.path.join(ROOT, "models/tts/en_US-lessac-medium.onnx"))
 out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def send(**m):

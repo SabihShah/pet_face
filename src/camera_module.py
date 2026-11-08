@@ -1,3 +1,5 @@
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root (models/ lives there)
 import argparse
 import collections
 import json
@@ -11,7 +13,7 @@ from mediapipe.tasks import python as mpp
 from mediapipe.tasks.python import vision
 from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
 
-MODEL = "models/face_detection_yunet_2023mar.onnx"
+MODEL = os.path.join(ROOT, "models/face_detection_yunet_2023mar.onnx")
 ADDR = ("127.0.0.1", 5005)
 EMO_EVERY = 0.2
 WINDOW = 6
@@ -61,7 +63,7 @@ def main():
     rec = None
     if not args.no_hands:
         rec = vision.GestureRecognizer.create_from_options(vision.GestureRecognizerOptions(
-            base_options=mpp.BaseOptions(model_asset_path="models/gesture_recognizer.task"),
+            base_options=mpp.BaseOptions(model_asset_path=os.path.join(ROOT, "models/gesture_recognizer.task")),
             running_mode=vision.RunningMode.VIDEO, num_hands=1))
     cap = cv2.VideoCapture(args.cam)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)

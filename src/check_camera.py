@@ -1,9 +1,11 @@
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root (models/ lives there)
 import urllib.request
 import time
 import cv2
 from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
 
-det = cv2.FaceDetectorYN.create("models/face_detection_yunet_2023mar.onnx", "", (320, 320), 0.8, 0.3, 5000)
+det = cv2.FaceDetectorYN.create(os.path.join(ROOT, "models/face_detection_yunet_2023mar.onnx"), "", (320, 320), 0.8, 0.3, 5000)
 fer = HSEmotionRecognizer(model_name="enet_b0_8_best_afew")
 cap = cv2.VideoCapture(1)
 ok, frame = cap.read()

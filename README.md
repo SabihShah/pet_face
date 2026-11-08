@@ -70,6 +70,20 @@ Place the following model files under `models/`:
 
 ## Usage
 
+### Quick start (all modules, one terminal)
+
+```bash
+./run.sh              # start brain, speak, app, camera, voice; stream logs; Ctrl+C stops all
+./run.sh --no-tail    # start without streaming logs
+./run.sh stop         # stop from another terminal
+```
+
+`run.sh` strips ROS from the environment, checks Ollama, sets the mic input volume
+(`MIC_VOLUME`, default 0.15), and writes each module's output to `logs/<module>.log`.
+Options: `CAM=0`, `WHISPER_MODEL=base.en`, `VOICE_ARGS="--wake-th 0.5"`, `CAMERA_ARGS="--no-preview"`.
+
+### Manual start
+
 Start each module in a separate terminal:
 
 ```bash
@@ -77,19 +91,19 @@ Start each module in a separate terminal:
 ollama serve
 
 # 2. AI brain (LLM + memory)
-python brain_module.py
+python src/brain_module.py
 
 # 3. Text-to-speech
-python speak_module.py
+python src/speak_module.py
 
 # 4. Camera (face detection + gesture recognition)
-python camera_module.py
+python src/camera_module.py
 
 # 5. Voice (wake word + STT)
-python voice_module.py
+python src/voice_module.py
 
 # 6. Animated face display
-python app.py
+python src/app.py
 ```
 
 ### Keyboard shortcuts (app.py)
@@ -105,13 +119,13 @@ python app.py
 ### Voice module options
 
 ```
-python voice_module.py --model base.en --wake alexa --wake-th 0.7 --window 10 --silence 0.8
+python src/voice_module.py --model base.en --wake alexa --wake-th 0.7 --window 10 --silence 0.8
 ```
 
 ### Camera options
 
 ```
-python camera_module.py --cam 1 --no-preview --no-hands
+python src/camera_module.py --cam 1 --no-preview --no-hands
 ```
 
 ## Voice Commands

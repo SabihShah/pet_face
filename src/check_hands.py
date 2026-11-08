@@ -1,3 +1,5 @@
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root (models/ lives there)
 import time
 import cv2
 import mediapipe as mp
@@ -5,7 +7,7 @@ from mediapipe.tasks import python as mpp
 from mediapipe.tasks.python import vision
 
 opts = vision.GestureRecognizerOptions(
-    base_options=mpp.BaseOptions(model_asset_path="models/gesture_recognizer.task"),
+    base_options=mpp.BaseOptions(model_asset_path=os.path.join(ROOT, "models/gesture_recognizer.task")),
     running_mode=vision.RunningMode.VIDEO, num_hands=1)
 rec = vision.GestureRecognizer.create_from_options(opts)
 cap = cv2.VideoCapture(1)

@@ -48,7 +48,8 @@ NO = re.compile(r"^\W*(no(?!\s+(problem|worries))|nope|nah|not really|never)\b",
 def yes_no(t):
     return "nod" if YES.search(t) else "shake" if NO.search(t) else None
 
-FACTS = os.path.expanduser("~/pet_face/facts.json")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root
+FACTS = os.path.join(ROOT, "facts.json")
 try:
     facts = json.load(open(FACTS))
     if not isinstance(facts, dict):
@@ -116,7 +117,7 @@ def extract(text):
 
 def mood_line():
     try:
-        d = json.load(open(os.path.expanduser("~/pet_face/mood.json")))
+        d = json.load(open(os.path.join(ROOT, "mood.json")))
         h = float(d.get("happiness", 0.3))
         since = time.time() - float(d.get("returned_at", 0.0))
         gone = float(d.get("returned_after", 0.0))
